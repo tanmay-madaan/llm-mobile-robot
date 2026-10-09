@@ -1,3 +1,4 @@
+import math
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
@@ -11,6 +12,7 @@ class NavigateToNode(Node):
         # Declare ROS 2 parameters
         self.declare_parameter('x', 1.0)
         self.declare_parameter('y', 0.0)
+        self.declare_parameter('yaw', 0.0)
 
         # Create action client
         self._action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
@@ -19,6 +21,7 @@ class NavigateToNode(Node):
         # Get parameters
         target_x = self.get_parameter('x').value
         target_y = self.get_parameter('y').value
+        target_yaw = self.get_parameter('yaw').value
 
         self.get_logger().info('Waiting for navigate_to_pose action server...')
         self._action_client.wait_for_server()
@@ -33,10 +36,10 @@ class NavigateToNode(Node):
         
         goal_msg.pose.pose.orientation.x = 0.0
         goal_msg.pose.pose.orientation.y = 0.0
-        goal_msg.pose.pose.orientation.z = 0.0
-        goal_msg.pose.pose.orientation.w = 1.0
+        goal_msg.pose.pose.orientation.z = math.sin(target_yaw / 2.0)
+        goal_msg.pose.pose.orientation.w = math.cos(target_yaw / 2.0)
 
-        self.get_logger().info(f'Sending goal to x={target_x}, y={target_y}...')
+        self.get_logger().info(f'Sending goal to x={target_x}, y={target_y}, yaw={target_yaw}...')
         self._send_goal_future = self._action_client.send_goal_async(goal_msg)
         self._send_goal_future.add_done_callback(self.goal_response_callback)
 
