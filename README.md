@@ -23,7 +23,7 @@ This project connects natural language understanding with deterministic robotics
 flowchart LR
     User([Natural Language Input]) --> LLM[Gemini LLM\ngemini-3.8-flash]
     LLM --> Validator[Plan Validator\ntargets.yaml]
-    Validator --> Confirm{User Approval\n[y/N]}
+    Validator --> Confirm{"User Approval<br>[y/N]"}
     Confirm -->|Approved| Executor[ROS 2 Task Executor]
     Confirm -->|Rejected| Stop([Stop])
     Executor --> Nav2[Nav2 NavigateToPose]
