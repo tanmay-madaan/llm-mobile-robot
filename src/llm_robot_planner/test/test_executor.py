@@ -1,0 +1,165 @@
+import pytest
+import rclpy
+from unittest.mock import MagicMock
+from action_msgs.msg import GoalStatus
+from nav2_msgs.action import NavigateToPose
+
+from llm_robot_planner.executor import PlanExecutor
+
+TEST_TARGETS = {
+    "home": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+    "red_box": {"x": 1.0, "y": 1.5, "yaw": 0.0},
+    "blue_cylinder": {"x": -1.0, "y": -1.5, "yaw": 3.14159},
+    "green_box": {"x": 1.0, "y": -1.0, "yaw": 0.0},
+}
+
+@pytest.fixture(scope="module")
+def rclpy_init():
+    rclpy.init()
+    yield
+    rclpy.shutdown()
+
+def create_mock_future(result_value):
+    future = rclpy.task.Future()
+    future.set_result(result_value)
+    return future
+
+def test_goal_msg_creation(rclpy_init):
+    executor = PlanExecutor(node_name='test_node_goal_msg', targets_dict=TEST_TARGETS)
+    goal_msg = executor.create_goal_msg("red_box")
+    assert goal_msg.pose.header.frame_id == 'map'
+    assert goal_msg.pose.pose.position.x == 1.0
+    assert goal_msg.pose.pose.position.y == 1.5
+    assert goal_msg.pose.pose.orientation.w == 1.0
+    executor.destroy_node()
+
+def test_execute_plan_success(rclpy_init):
+    mock_action_client = MagicMock()
+    mock_action_client.wait_for_server.return_value = True
+
+    # Goal handle mock
+    goal_handle = MagicMock()
+    goal_handle.accepted = True
+    
+    # Result mock
+    result = MagicMock()
+    result.status = GoalStatus.STATUS_SUCCEEDED
+    goal_handle.get_result_async.return_value = create_mock_future(result)
+
+    mock_action_client.send_goal_async.return_value = create_mock_future(goal_handle)
+
+    executor = PlanExecutor(
+        node_name='test_node_success',
+        targets_dict=TEST_TARGETS,
+        action_client=mock_action_client
+    )
+
+    plan = {
+        "plan": [
+            {"action": "navigate_to_target", "target": "home"},
+            {"action": "navigate_to_target", "target": "red_box"}
+        ]
+    }
+
+    assert executor.execute_plan(plan) is True
+    assert mock_action_client.send_goal_async.call_count == 2
+    executor.destroy_node()
+
+def test_execute_plan_stops_on_rejection(rclpy_init):
+    mock_action_client = MagicMock()
+    mock_action_client.wait_for_server.return_value = True
+
+    # First goal is rejected
+    goal_handle = MagicMock()
+    goal_handle.accepted = False
+    mock_action_client.send_goal_async.return_value = create_mock_future(goal_handle)
+
+    executor = PlanExecutor(
+        node_name='test_node_rejection',
+        targets_dict=TEST_TARGETS,
+        action_client=mock_action_client
+    )
+
+    plan = [
+        {"action": "navigate_to_target", "target": "blue_cylinder"},
+        {"action": "navigate_to_target", "target": "green_box"}
+    ]
+
+    assert executor.execute_plan(plan) is False
+    # Second goal must not be called after first fails
+    assert mock_action_client.send_goal_async.call_count == 1
+    executor.destroy_node()
+
+def test_execute_plan_stops_on_failure(rclpy_init):
+    mock_action_client = MagicMock()
+    mock_action_client.wait_for_server.return_value = True
+
+    # First goal accepted but aborted
+    goal_handle = MagicMock()
+    goal_handle.accepted = True
+
+    result = MagicMock()
+    result.status = GoalStatus.STATUS_ABORTED
+    goal_handle.get_result_async.return_value = create_mock_future(result)
+
+    mock_action_client.send_goal_async.return_value = create_mock_future(goal_handle)
+
+    executor = PlanExecutor(
+        node_name='test_node_abort',
+        targets_dict=TEST_TARGETS,
+        action_client=mock_action_client
+    )
+
+    plan = [
+        {"action": "navigate_to_target", "target": "blue_cylinder"},
+        {"action": "navigate_to_target", "target": "green_box"}
+    ]
+
+    assert executor.execute_plan(plan) is False
+    assert mock_action_client.send_goal_async.call_count == 1
+    executor.destroy_node()
+
+def test_execute_plan_stops_on_cancellation(rclpy_init):
+    mock_action_client = MagicMock()
+    mock_action_client.wait_for_server.return_value = True
+
+    goal_handle = MagicMock()
+    goal_handle.accepted = True
+
+    result = MagicMock()
+    result.status = GoalStatus.STATUS_CANCELED
+    goal_handle.get_result_async.return_value = create_mock_future(result)
+
+    mock_action_client.send_goal_async.return_value = create_mock_future(goal_handle)
+
+    executor = PlanExecutor(
+        node_name='test_node_cancel',
+        targets_dict=TEST_TARGETS,
+        action_client=mock_action_client
+    )
+
+    plan = [
+        {"action": "navigate_to_target", "target": "home"},
+        {"action": "navigate_to_target", "target": "red_box"}
+    ]
+
+    assert executor.execute_plan(plan) is False
+    assert mock_action_client.send_goal_async.call_count == 1
+    executor.destroy_node()
+
+def test_execute_plan_rejects_invalid_plan(rclpy_init):
+    mock_action_client = MagicMock()
+    executor = PlanExecutor(
+        node_name='test_node_invalid',
+        targets_dict=TEST_TARGETS,
+        action_client=mock_action_client
+    )
+
+    # Unknown target
+    plan = [
+        {"action": "navigate_to_target", "target": "unknown_location"}
+    ]
+
+    assert executor.execute_plan(plan) is False
+    assert mock_action_client.send_goal_async.call_count == 0
+    executor.destroy_node()
