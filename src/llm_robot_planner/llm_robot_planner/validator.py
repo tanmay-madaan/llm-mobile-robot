@@ -1,12 +1,15 @@
 import os
-import yaml
-from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 
-SUPPORTED_ACTIONS = {"navigate_to_target"}
+from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
+import yaml
+
+SUPPORTED_ACTIONS = {'navigate_to_target'}
+
 
 def load_valid_targets(targets_file: str = None) -> set:
     """
     Load valid target names from targets.yaml.
+
     If no file is provided, attempts to load from llm_robot_skills package share or src.
     """
     if targets_file and os.path.exists(targets_file):
@@ -21,7 +24,7 @@ def load_valid_targets(targets_file: str = None) -> set:
             if os.path.exists(src_dir):
                 path = src_dir
             else:
-                raise FileNotFoundError("Could not find targets.yaml in share or src directory")
+                raise FileNotFoundError('Could not find targets.yaml in share or src directory')
 
     with open(path, 'r') as f:
         data = yaml.safe_load(f)
@@ -31,9 +34,12 @@ def load_valid_targets(targets_file: str = None) -> set:
 
     return set(data['targets'].keys())
 
+
 class PlanValidationError(Exception):
     """Raised when a plan fails schema or target validation."""
+
     pass
+
 
 def validate_plan(plan_data, valid_targets: set = None) -> list:
     """
@@ -59,53 +65,63 @@ def validate_plan(plan_data, valid_targets: set = None) -> list:
         valid_targets = load_valid_targets()
 
     if isinstance(plan_data, dict):
-        if "plan" not in plan_data:
+        if 'plan' not in plan_data:
             raise PlanValidationError("Plan object must contain a 'plan' key")
-        actions = plan_data["plan"]
+        actions = plan_data['plan']
     elif isinstance(plan_data, list):
         actions = plan_data
     else:
-        raise PlanValidationError(f"Malformed plan: expected dict or list, got {type(plan_data).__name__}")
+        err_msg = f'Malformed plan: expected dict or list, got {type(plan_data).__name__}'
+        raise PlanValidationError(err_msg)
 
     if not isinstance(actions, list):
-        raise PlanValidationError(f"Malformed plan: 'plan' must be a list, got {type(actions).__name__}")
+        err_msg = f"Malformed plan: 'plan' must be a list, got {type(actions).__name__}"
+        raise PlanValidationError(err_msg)
 
     if len(actions) == 0:
-        raise PlanValidationError("Plan is empty: must contain at least one action")
+        raise PlanValidationError('Plan is empty: must contain at least one action')
 
     validated_actions = []
     for idx, step in enumerate(actions):
         if not isinstance(step, dict):
-            raise PlanValidationError(f"Step {idx}: expected dictionary, got {type(step).__name__}")
+            step_type = type(step).__name__
+            raise PlanValidationError(f'Step {idx}: expected dictionary, got {step_type}')
 
-        if "action" not in step:
+        if 'action' not in step:
             raise PlanValidationError(f"Step {idx}: missing required key 'action'")
 
-        action = step["action"]
+        action = step['action']
         if not isinstance(action, str):
             raise PlanValidationError(f"Step {idx}: 'action' must be a string")
 
         if action not in SUPPORTED_ACTIONS:
-            raise PlanValidationError(f"Step {idx}: unsupported action '{action}'. Supported: {sorted(list(SUPPORTED_ACTIONS))}")
+            supported = sorted(SUPPORTED_ACTIONS)
+            raise PlanValidationError(
+                f"Step {idx}: unsupported action '{action}'. Supported: {supported}"
+            )
 
-        if action == "navigate_to_target":
-            if "target" not in step:
-                raise PlanValidationError(f"Step {idx}: 'navigate_to_target' action requires a 'target' key")
-            
-            target = step["target"]
+        if action == 'navigate_to_target':
+            if 'target' not in step:
+                err_msg = f"Step {idx}: 'navigate_to_target' action requires a 'target' key"
+                raise PlanValidationError(err_msg)
+
+            target = step['target']
             if not isinstance(target, str):
                 raise PlanValidationError(f"Step {idx}: 'target' must be a string")
 
             if target not in valid_targets:
+                valid_list = sorted(valid_targets)
                 raise PlanValidationError(
-                    f"Step {idx}: unknown target '{target}'. Valid targets from targets.yaml: {sorted(list(valid_targets))}"
+                    f"Step {idx}: unknown target '{target}'. "
+                    f'Valid targets from targets.yaml: {valid_list}'
                 )
 
         # Disallow extra unexpected parameters to prevent arbitrary commands
-        allowed_keys = {"action", "target"}
+        allowed_keys = {'action', 'target'}
         extra_keys = set(step.keys()) - allowed_keys
         if extra_keys:
-            raise PlanValidationError(f"Step {idx}: unexpected keys in step: {sorted(list(extra_keys))}")
+            extra_sorted = sorted(extra_keys)
+            raise PlanValidationError(f'Step {idx}: unexpected keys in step: {extra_sorted}')
 
         validated_actions.append(step)
 

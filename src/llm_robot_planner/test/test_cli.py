@@ -80,6 +80,7 @@ def test_cli_plan_approved_and_executed_failure():
     mock_llm_client.generate_plan.return_value = mock_plan
 
     mock_executor = MagicMock()
+    mock_executor._interrupted = False
     mock_executor.execute_plan.return_value = False
 
     ret = run_interactive_planner(
@@ -110,3 +111,55 @@ def test_cli_llm_error_handling():
     assert ret == 1
     assert any("Plan generation/validation failed" in line for line in outputs)
     assert not mock_executor.execute_plan.called
+
+def test_cli_plan_interrupted_by_user():
+    inputs = [
+        "Go to the green box",
+        "y",
+    ]
+    outputs = []
+
+    mock_llm_client = MagicMock()
+    mock_plan = [{"action": "navigate_to_target", "target": "green_box"}]
+    mock_llm_client.generate_plan.return_value = mock_plan
+
+    mock_executor = MagicMock()
+    mock_executor._interrupted = True
+    mock_executor.execute_plan.return_value = False
+
+    ret = run_interactive_planner(
+        input_func=lambda prompt: inputs.pop(0),
+        print_func=outputs.append,
+        llm_client=mock_llm_client,
+        executor=mock_executor,
+    )
+
+    assert ret == 0
+    assert any("Execution interrupted by user" in line for line in outputs)
+
+def test_cli_plan_keyboard_interrupt_exception():
+    inputs = [
+        "Go to the green box",
+        "y",
+    ]
+    outputs = []
+
+    mock_llm_client = MagicMock()
+    mock_plan = [{"action": "navigate_to_target", "target": "green_box"}]
+    mock_llm_client.generate_plan.return_value = mock_plan
+
+    mock_executor = MagicMock()
+    mock_goal = MagicMock()
+    mock_executor._current_goal_handle = mock_goal
+    mock_executor.execute_plan.side_effect = KeyboardInterrupt()
+
+    ret = run_interactive_planner(
+        input_func=lambda prompt: inputs.pop(0),
+        print_func=outputs.append,
+        llm_client=mock_llm_client,
+        executor=mock_executor,
+    )
+
+    assert ret == 0
+    assert mock_executor.cancel_active_goal.called
+    assert any("Execution interrupted by user" in line for line in outputs)
