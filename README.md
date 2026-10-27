@@ -6,12 +6,13 @@ An autonomous mobile robot in **ROS 2 Jazzy** and **Gazebo Harmonic** that conve
 
 ## Demo
 
-<!-- Paste your GitHub uploaded video or gif link below -->
-<!-- Example: https://github.com/user-attachments/assets/xxxx-xxxx-xxxx.mp4 -->
-*(Video demo link: replace this line with your uploaded GitHub video URL or asset path)*
+**End-to-End Navigation Demo**
 
-> **End-to-End Execution**: A user enters *"Go to the blue cylinder and return home"*. The high-level plan is generated via Gemini, validated against predefined spatial targets, explicitly approved by the user, and sequentially executed by Nav2 with active obstacle avoidance.
+The following demo showcases the complete pipeline: natural-language task planning using Google Gemini, target validation, human approval, and sequential autonomous navigation using ROS 2 and Nav2.
 
+https://github.com/user-attachments/assets/c8aa5a7a-fd5c-44df-91ef-f6fbd63a4b6c
+
+> **Example task:** "Go to the blue cylinder and return home." The robot navigates to the predefined target and then returns home.
 ---
 
 ## Overview
