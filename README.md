@@ -4,16 +4,31 @@ An autonomous mobile robot in **ROS 2 Jazzy** and **Gazebo Harmonic** that conve
 
 ---
 
+## Demo
+
+<!-- Paste your GitHub uploaded video or gif link below -->
+<!-- Example: https://github.com/user-attachments/assets/xxxx-xxxx-xxxx.mp4 -->
+*(Video demo link: replace this line with your uploaded GitHub video URL or asset path)*
+
+> **End-to-End Execution**: A user enters *"Go to the blue cylinder and return home"*. The high-level plan is generated via Gemini, validated against predefined spatial targets, explicitly approved by the user, and sequentially executed by Nav2 with active obstacle avoidance.
+
+---
+
 ## Overview
 
-This project connects natural language understanding with deterministic robotics execution. High-level commands (e.g., *"Go to the blue cylinder and then return home"*) are translated by **Google Gemini** (`gemini-3.8-flash`) into structured action sequences. Before motion begins, plans undergo schema and target validation, followed by explicit user confirmation. Navigation is executed through standard Nav2 action interfaces (`NavigateToPose`).
+This project bridges natural-language task reasoning with deterministic robotics execution. High-level commands are decomposed by **Google Gemini** into structured, verifiable action sequences. 
+
+To ensure physical robot safety:
+- **No direct motor control**: The LLM never touches velocity topics (`/cmd_vel`) or raw hardware.
+- **Strict schema & semantic validation**: Every action and target must exist in a verified coordinate registry (`targets.yaml`).
+- **Human-in-the-Loop (HITL)**: Robot movement only begins after explicit user confirmation (`[y/N]`).
+- **Robust execution & cancellation**: Goals are dispatched sequentially via Nav2 action servers (`NavigateToPose`), aborting immediately on failure, timeout, or user `Ctrl+C` interrupt.
 
 ### Key Features
-- **Safety-First Architecture**: The LLM only handles high-level planning. It has no direct access to velocity topics (`/cmd_vel`) or raw hardware commands.
-- **Plan Validation**: Automatically checks that all actions and target locations exist in the verified target registry before execution.
-- **Human-in-the-Loop Approval**: Displays the decomposed plan for user review and explicit confirmation (`[y/N]`) before moving the robot.
-- **Deterministic Execution**: Sequentially runs navigation goals through Nav2 action clients, halting immediately if a goal is rejected or aborted.
-- **Simulation Tested**: Fully integrated with differential-drive control, 2D LiDAR, AMCL localization, and costmap obstacle avoidance.
+- **Deterministic AI-to-Robot Pipeline**: Natural Language → Structured JSON Plan → Registry Validation → User Confirmation → Sequential Nav2 Execution.
+- **Safety & Lifecycle Guards**: Goal cancellation verification on timeout or interrupt; immediate stop on target rejection.
+- **Full ROS 2 / Gazebo Harmonic Stack**: Differential drive control, 2D LiDAR simulation, AMCL localization, and local/global costmap inflation layers.
+- **Extensible Environments**: Pre-mapped default obstacle world with ongoing support for multi-room indoor office layouts.
 
 ---
 
@@ -21,11 +36,11 @@ This project connects natural language understanding with deterministic robotics
 
 ```mermaid
 flowchart LR
-    User([Natural Language Input]) --> LLM[Gemini LLM\ngemini-3.8-flash]
+    User([Natural Language Input]) --> LLM[Gemini LLM\ngemini-3.5-flash / 3.8-flash]
     LLM --> Validator[Plan Validator\ntargets.yaml]
     Validator --> Confirm{"User Approval<br>[y/N]"}
     Confirm -->|Approved| Executor[ROS 2 Task Executor]
-    Confirm -->|Rejected| Stop([Stop])
+    Confirm -->|Rejected| Stop([Halt])
     Executor --> Nav2[Nav2 NavigateToPose]
     Nav2 --> Gazebo[Gazebo Simulation]
 ```
@@ -34,9 +49,9 @@ flowchart LR
 
 ## Tech Stack
 
-- **Robotics & Simulation**: ROS 2 Jazzy, Gazebo Harmonic, Nav2, `ros2_control`
-- **Language & Frameworks**: Python 3.12, URDF / Xacro
-- **AI Task Planning**: Google GenAI SDK (`google-genai`), Gemini 3.8 Flash (`gemini-3.8-flash`)
+- **Robotics & Simulation**: ROS 2 Jazzy, Gazebo Harmonic, Nav2, `ros2_control`, `slam_toolbox`
+- **Languages & Frameworks**: Python 3.12, URDF / Xacro, PyTest
+- **AI Task Planning**: Google GenAI SDK (`google-genai`), Gemini API
 
 ---
 
@@ -63,19 +78,19 @@ export GEMINI_API_KEY="your-gemini-api-key"
 ```
 
 ### 3. Launch Simulation & Navigation
-In terminal 1:
+In **Terminal 1**:
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/llm_robot_ws/install/setup.bash
 ros2 launch llm_robot_nav bringup.launch.py
 ```
+*(Spawns the robot in Gazebo, initializes controllers, launches RViz, and brings up Nav2).*
 
 ### 4. Run Interactive Task Planner
-In terminal 2:
+In **Terminal 2**:
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/llm_robot_ws/install/setup.bash
-export GEMINI_API_KEY="your-gemini-api-key"
 ros2 run llm_robot_planner plan_task
 ```
 
@@ -116,7 +131,7 @@ Do you want the robot to execute this plan? [y/N]: y
 
 ## Testing
 
-The planner package includes unit and integration tests covering plan validation, target verification, execution flow, and API error handling using mocks (no Gazebo simulation or active API key required):
+The planner package includes unit and integration tests covering plan validation, target verification, execution timeout, Ctrl+C cancellation, and mock API handling:
 
 ```bash
 cd ~/llm_robot_ws
@@ -125,12 +140,12 @@ source install/setup.bash
 pytest src/llm_robot_planner/test/ -v
 ```
 
-**Result**: 29 passing tests across schema validation, executor transitions, Gemini client integration, and the CLI interface.
+**Result**: 39 passing tests across schema validation, executor state transitions, cancellation guarantees, Gemini client integration, and the CLI interface.
 
 ---
 
-## Limitations
+## Honest Limitations
 
-- **Predefined Targets**: The robot navigates between known targets registered in `targets.yaml` (`home`, `red_box`, `blue_cylinder`, `green_box`); it does not perform real-time visual object detection.
-- **Fixed Map**: Operates in a static 2D occupancy grid map generated via SLAM.
-- **Simulation Only**: Validated in Gazebo Harmonic; physical robot deployment has not been performed.
+- **Predefined Targets**: The robot navigates between verified waypoints registered in `targets.yaml` (`home`, `red_box`, `blue_cylinder`, `green_box`); it does not perform real-time open-vocabulary visual object detection.
+- **Fixed Map**: Operates in static 2D occupancy grid maps generated via SLAM.
+- **Simulation Only**: Validated in Gazebo Harmonic simulation; physical hardware deployment has not been conducted.
